@@ -22,7 +22,11 @@ impl From<crate::vcd::VcdParseError> for WellenError {
 
 impl From<fst_reader::ReaderError> for WellenError {
     fn from(value: fst_reader::ReaderError) -> Self {
-        WellenError::FailedToLoad(FileFormat::Fst, value.to_string())
+        match value {
+            fst_reader::ReaderError::MissingGeometry()
+            | fst_reader::ReaderError::MissingHierarchy() => WellenError::IncompleteFST,
+            _ => WellenError::FailedToLoad(FileFormat::Fst, value.to_string()),
+        }
     }
 }
 
@@ -63,8 +67,19 @@ pub fn read_header_from_file<P: AsRef<std::path::Path>>(
             })
         }
         FileFormat::Fst => {
-            let input = std::io::BufReader::new(std::fs::File::open(filename)?);
-            let (hierarchy, body) = crate::fst::read_header(input, options)?;
+            let input = std::io::BufReader::new(std::fs::File::open(filename.as_ref())?);
+            let (hierarchy, body) = match crate::fst::read_header(input, options) {
+                Ok(header) => header,
+                Err(WellenError::IncompleteFST) => {
+                    let input = std::io::BufReader::new(std::fs::File::open(filename.as_ref())?);
+                    let mut hierarchy_filename = filename.as_ref().to_path_buf();
+                    hierarchy_filename.set_extension("fst.hier");
+                    let hierarchy =
+                        std::io::BufReader::new(std::fs::File::open(hierarchy_filename)?);
+                    crate::fst::read_header_incomplete(input, hierarchy, options)?
+                }
+                Err(e) => return Err(e),
+            };
             let body = ReadBodyContinuation(ReadBodyData::Fst(Box::new(body)));
             Ok(HeaderResult {
                 hierarchy,

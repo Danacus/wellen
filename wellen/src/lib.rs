@@ -45,6 +45,8 @@ pub type TimeTable = Vec<Time>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WellenError {
+    #[error("FST file is incomplete")]
+    IncompleteFST,
     #[error("failed to load {0:?}:\n{1}")]
     FailedToLoad(FileFormat, String),
     #[error("unknown file format, only GHW, FST and VCD are supported")]

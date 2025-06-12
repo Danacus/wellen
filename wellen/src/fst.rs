@@ -25,6 +25,16 @@ pub fn read_header<R: BufRead + Seek>(
     let cont = ReadBodyContinuation(reader);
     Ok((hierarchy, cont))
 }
+pub fn read_header_incomplete<R: BufRead + Seek, H: BufRead + Seek + Sync + Send + 'static>(
+    input: R,
+    hierarchy: H,
+    _options: &LoadOptions,
+) -> Result<(Hierarchy, ReadBodyContinuation<R>)> {
+    let mut reader = FstReader::open_incomplete_and_read_time_table(input, hierarchy)?;
+    let hierarchy = read_hierarchy(&mut reader)?;
+    let cont = ReadBodyContinuation(reader);
+    Ok((hierarchy, cont))
+}
 pub fn read_body<R: BufRead + Seek + Sync + Send + 'static>(
     data: ReadBodyContinuation<R>,
 ) -> Result<(SignalSource, TimeTable)> {
@@ -38,11 +48,11 @@ pub fn read_body<R: BufRead + Seek + Sync + Send + 'static>(
 
 pub struct ReadBodyContinuation<R: BufRead + Seek>(FstReader<R>);
 
-struct FstWaveDatabase<R: BufRead + Seek> {
+struct FstWaveDatabase<R: BufRead + Seek + Sync + Send> {
     reader: FstReader<R>,
 }
 
-impl<R: BufRead + Seek> FstWaveDatabase<R> {
+impl<R: BufRead + Seek + Sync + Send> FstWaveDatabase<R> {
     fn new(reader: FstReader<R>) -> Self {
         FstWaveDatabase { reader }
     }
